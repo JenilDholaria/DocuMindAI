@@ -1,37 +1,16 @@
+
 package com.documind.ai
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,18 +32,19 @@ data class ChatMessage(
 @Composable
 fun ChatScreen(
     documentName: String,
+    messages: List<ChatMessage>,
+    isLoading: Boolean = false,
     onBack: () -> Unit = {},
     onSendQuestion: (String) -> Unit = {}
 ) {
     var question by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
 
-    val messages = remember {
-        mutableStateListOf(
-            ChatMessage(
-                text = "Hi! Ask me a question about your PDF.",
-                isUser = false
-            )
-        )
+    LaunchedEffect(messages.size, isLoading) {
+        val count = messages.size + if (isLoading) 1 else 0
+        if (count > 0) {
+            listState.animateScrollToItem(count - 1)
+        }
     }
 
     Surface(
@@ -80,10 +60,7 @@ fun ChatScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
-                    Text(
-                        text = "‹",
-                        fontSize = 32.sp
-                    )
+                    Text("‹", fontSize = 32.sp)
                 }
 
                 Column(modifier = Modifier.weight(1f)) {
@@ -116,6 +93,7 @@ fun ChatScreen(
             )
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -124,7 +102,25 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(messages) { message ->
-                    MessageBubble(message = message)
+                    MessageBubble(message)
+                }
+
+                if (isLoading) {
+                    item {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Text("Generating answer...")
+                        }
+                    }
                 }
             }
 
@@ -170,19 +166,12 @@ fun ChatScreen(
                     onClick = {
                         val submittedQuestion = question.trim()
 
-                        if (submittedQuestion.isNotEmpty()) {
-                            messages.add(
-                                ChatMessage(
-                                    text = submittedQuestion,
-                                    isUser = true
-                                )
-                            )
-
+                        if (submittedQuestion.isNotEmpty() && !isLoading) {
                             question = ""
                             onSendQuestion(submittedQuestion)
                         }
                     },
-                    enabled = question.isNotBlank(),
+                    enabled = question.isNotBlank() && !isLoading,
                     shape = CircleShape,
                     modifier = Modifier.size(52.dp),
                     contentPadding = PaddingValues(0.dp)
@@ -202,8 +191,7 @@ private fun MessageBubble(message: ChatMessage) {
             Arrangement.End
         } else {
             Arrangement.Start
-        },
-        verticalAlignment = Alignment.Top
+        }
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(0.86f),
