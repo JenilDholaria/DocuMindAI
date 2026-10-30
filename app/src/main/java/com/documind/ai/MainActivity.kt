@@ -8,12 +8,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.documind.ai.ui.theme.DocuMindAITheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,11 +25,26 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             DocuMindAITheme {
-                var documentId by remember { mutableStateOf<String?>(null) }
-                var documentName by remember { mutableStateOf("Your PDF") }
-                var isUploading by remember { mutableStateOf(false) }
-                var isSending by remember { mutableStateOf(false) }
-                var errorMessage by remember { mutableStateOf<String?>(null) }
+
+                var documentId by remember {
+                    mutableStateOf<String?>(null)
+                }
+
+                var documentName by remember {
+                    mutableStateOf("Your PDF")
+                }
+
+                var isUploading by remember {
+                    mutableStateOf(false)
+                }
+
+                var isSending by remember {
+                    mutableStateOf(false)
+                }
+
+                var errorMessage by remember {
+                    mutableStateOf<String?>(null)
+                }
 
                 val messages = remember {
                     mutableStateListOf(
@@ -43,9 +57,11 @@ class MainActivity : ComponentActivity() {
 
                 val scope = rememberCoroutineScope()
 
+                // Opens the Android PDF/file picker.
                 val pdfPicker = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.GetContent()
                 ) { uri: Uri? ->
+
                     if (uri != null) {
                         scope.launch {
                             isUploading = true
@@ -53,9 +69,12 @@ class MainActivity : ComponentActivity() {
 
                             try {
                                 val result = withContext(Dispatchers.IO) {
+
                                     val bytes = contentResolver
                                         .openInputStream(uri)
-                                        ?.use { it.readBytes() }
+                                        ?.use { inputStream ->
+                                            inputStream.readBytes()
+                                        }
                                         ?: error("Could not read the PDF")
 
                                     val filename = getPdfFilename(uri)
@@ -63,9 +82,11 @@ class MainActivity : ComponentActivity() {
                                     ApiClient.uploadPdf(bytes, filename)
                                 }
 
+                                // Save the uploaded document details.
                                 documentId = result.documentId
                                 documentName = result.filename
 
+                                // Reset the conversation for the new PDF.
                                 messages.clear()
                                 messages.add(
                                     ChatMessage(
@@ -87,66 +108,42 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+
+                    // Show the redesigned home screen until a PDF is uploaded.
                     if (documentId == null) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = "DocuMindAI",
-                                style = MaterialTheme.typography.headlineLarge
-                            )
 
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Text("Upload a PDF to start asking questions")
-
-                            Spacer(modifier = Modifier.height(24.dp))
-
-                            Button(
-                                enabled = !isUploading,
-                                onClick = {
+                        HomeScreen(
+                            isUploading = isUploading,
+                            errorMessage = errorMessage,
+                            onUploadClick = {
+                                if (!isUploading) {
                                     pdfPicker.launch("application/pdf")
                                 }
-                            ) {
-                                Text(
-                                    if (isUploading) "Uploading..."
-                                    else "Select PDF"
-                                )
                             }
+                        )
 
-                            if (isUploading) {
-                                Spacer(modifier = Modifier.height(16.dp))
-                                CircularProgressIndicator()
-                            }
-
-                            errorMessage?.let { error ->
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = error,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
                     } else {
+
+                        // Keep the existing chat screen and question-answer flow.
                         ChatScreen(
                             documentName = documentName,
                             messages = messages,
                             isLoading = isSending,
+
                             onBack = {
-                                if (!isSending) {
+                                if (!isSending && !isUploading) {
                                     documentId = null
                                     documentName = "Your PDF"
                                     errorMessage = null
                                 }
                             },
+
                             onSendQuestion = { question ->
+
                                 val currentId = documentId
 
                                 if (currentId != null && !isSending) {
+
                                     messages.add(
                                         ChatMessage(
                                             text = question,
@@ -165,6 +162,8 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             }
 
+                                            // Ignore responses for a document
+                                            // that is no longer the active one.
                                             if (documentId == currentId) {
                                                 messages.add(
                                                     ChatMessage(
@@ -184,7 +183,10 @@ class MainActivity : ComponentActivity() {
                                             if (documentId == currentId) {
                                                 messages.add(
                                                     ChatMessage(
-                                                        text = "Error: ${e.message ?: "Could not get an answer"}",
+                                                        text = "Error: ${
+                                                            e.message
+                                                                ?: "Could not get an answer"
+                                                        }",
                                                         isUser = false
                                                     )
                                                 )
@@ -202,6 +204,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Gets the original filename selected by the user.
     private fun getPdfFilename(uri: Uri): String {
         var filename = "document.pdf"
 
@@ -212,6 +215,7 @@ class MainActivity : ComponentActivity() {
             null,
             null
         )?.use { cursor ->
+
             val index = cursor.getColumnIndex(
                 OpenableColumns.DISPLAY_NAME
             )
